@@ -12,7 +12,7 @@
 
 //! Recursive visitors for ast Nodes. See [`Visitor`] for more details.
 
-use crate::ast::{Expr, ObjectName, Statement};
+use crate::ast::{Expr, ObjectName, Select, Statement};
 use core::ops::ControlFlow;
 
 /// A type that can be visited by a [`Visitor`]. See [`Visitor`] for
@@ -179,6 +179,14 @@ pub trait Visitor {
     /// Type returned when the recursion returns early.
     type Break;
 
+    fn pre_visit_select(&mut self, _select: &Select) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    fn post_visit_select(&mut self, _select: &Select) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
     /// Invoked for any relations (e.g. tables) that appear in the AST before visiting children
     fn pre_visit_relation(&mut self, _relation: &ObjectName) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
@@ -257,6 +265,14 @@ pub trait VisitorMut {
     /// Type returned when the recursion returns early.
     type Break;
 
+    fn pre_visit_select(&mut self, _select: &mut Select) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
+    fn post_visit_select(&mut self, _select: &mut Select) -> ControlFlow<Self::Break> {
+        ControlFlow::Continue(())
+    }
+
     /// Invoked for any relations (e.g. tables) that appear in the AST before visiting children
     fn pre_visit_relation(&mut self, _relation: &mut ObjectName) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
@@ -286,6 +302,34 @@ pub trait VisitorMut {
     fn post_visit_statement(&mut self, _statement: &mut Statement) -> ControlFlow<Self::Break> {
         ControlFlow::Continue(())
     }
+}
+
+struct SelectVisitor<F>(F);
+
+impl<E, F: FnMut(&Select) -> ControlFlow<E>> Visitor for SelectVisitor<F> {
+    type Break = E;
+
+    fn pre_visit_select(&mut self, select: &Select) -> ControlFlow<Self::Break> {
+        self.0(select)
+    }
+}
+
+impl<E, F: FnMut(&mut Select) -> ControlFlow<E>> VisitorMut for SelectVisitor<F> {
+    type Break = E;
+
+    fn post_visit_select(&mut self, select: &mut Select) -> ControlFlow<Self::Break> {
+        self.0(select)
+    }
+}
+
+pub fn visit_selects<V, E, F>(v: &V, f: F) -> ControlFlow<E>
+where
+    V: Visit,
+    F: FnMut(&Select) -> ControlFlow<E>,
+{
+    let mut visitor = SelectVisitor(f);
+    v.visit(&mut visitor)?;
+    ControlFlow::Continue(())
 }
 
 struct RelationVisitor<F>(F);
